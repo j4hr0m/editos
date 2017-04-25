@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link href="https://fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet">
+    <style>
+    body {
+      height: 100vh;
+      margin: 0;
+      font-family: 'Source Code Pro', monospace;
+    }
+
+    [contenteditable=true] {
+      outline: none;
+      display: block;
+    }
+
+    [contenteditable=true]:empty:after {
+      content: "Type here...";
+      display: inline-block;
+    }
+
+    section {
+      box-sizing:border-box;
+      border-bottom: 1px solid black;
+      counter-reset: line;
+      height: calc(100% - 25px);
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    section>div:before {
+      background-color: lightgrey;
+      counter-increment: line;
+      content: counter(line);
+      text-align: right;
+    }
+    </style>
+  </head>
+  <body>
+    <section id="editos" contenteditable="true" onpaste="return false;"></section>
+    <section style="max-height:25px;">
+      <button onclick="download('source.txt')">Download source...</button>
+      <input type="file" onchange="upload()"><br>
+    </section>
+  </body>
+</html>
+
+<script>
+  var pseudoRules = document.createElement("style");
+  document.head.appendChild(pseudoRules);
+  var letterSize = 10;
+  var gutterRule = 'section>div:before {display: inline-block; min-width: ' + letterSize + 'px;}';
+  pseudoRules.sheet.insertRule(gutterRule, 0);
+  var editos = document.getElementById("editos");
+
+  const upload = () => {
+    var file = document.querySelector('input[type=file]').files[0];
+    var reader = new FileReader();
+    reader.addEventListener("load", () => {
+      while (editos.firstChild) {
+        editos.removeChild(editos.firstChild);
+      }
+      var splitted = reader.result.split('\r\n');
+      for (var i = 0 ; i < splitted.length ; i++) {
+        var div = document.createElement("div");
+        div.innerHTML = splitted[i];
+        editos.appendChild(div);
+      }
+    }, false);
+
+    if (file) {
+      reader.readAsText(file);
+    }
+  }
+
+  const download = (name) => {
+    var data = document.getElementById("editos").innerText.replace(/(?:\n)/g, '\r\n');
+    var blob = new Blob([data], {type: 'text/plain;charset=utf-8'});
+    var url = URL.createObjectURL(blob);
+    var pom = document.createElement('a');
+    //window.open(url);
+    pom.href = url;
+    pom.download = name;
+    document.body.appendChild(pom);
+    pom.click();
+    setTimeout(function() {
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(pom);
+    }, 0); 
+  }
+
+  const initLines = (lines) => {
+    var gutterWidth = (1 + Math.floor(Math.log10(lines))) * letterSize;
+    pseudoRules.sheet.deleteRule(0);
+    var gutterRule = 'div:before {display: inline-block; min-width: ' + gutterWidth + 'px;}';
+    pseudoRules.sheet.insertRule(gutterRule, 0);
+  }
+
+  editos.addEventListener("click", (e) => {
+    if (!editos.childElementCount) {
+      editos.appendChild(document.createElement("div"));
+      // TODO (ROME) the curser is now before the gutter: insert cursor after gutter
+    }
+  }, { passive: true });
+
+  editos.addEventListener("paste", (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    var clipboard = e.clipboardData || window.clipboardData;
+    var pastedText = clipboard.getData('text/plain');
+    var splitted = pastedText.split('\n');
+    var selection = window.getSelection(),
+        range = selection.getRangeAt(0);
+    var startNode = range.startContainer; 
+    if (startNode.nodeType === Node.TEXT_NODE) {
+      for (var i = 0 ; i < splitted.length ; i++) {
+        if (i == 0) {
+          range.insertNode(document.createTextNode(splitted[i]));
+        } else {
+          var div = document.createElement("div");
+          div.innerHTML = splitted[i];
+          startNode.parentNode.parentElement.insertBefore(div, startNode.parentNode.nextSibling);
+        }
+      }
+    } else {
+      for (var i = (splitted.length - 1) ; i >= 0 ; i--) {
+        if (i == 0) {
+          while (range.startContainer.firstChild) {
+            range.startContainer.removeChild(range.startContainer.firstChild);
+          }
+          range.insertNode(document.createTextNode(splitted[i]));
+        } else {
+          var div = document.createElement("div");
+          div.innerHTML = splitted[i];
+          startNode.parentElement.insertBefore(div, startNode.nextSibling);
+        }
+      }
+    }
+    initLines(editos.childElementCount);
+  });
+  editos.addEventListener("keypress", (e) => {
+    if (e.keyCode == 13) {
+      initLines(editos.childElementCount + 1);
+    }
+  }, { passive: true });
+</script>
